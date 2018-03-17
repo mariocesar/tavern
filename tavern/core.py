@@ -1,26 +1,53 @@
 import logging
 import os
-import pprint
 import textwrap
 
 import yaml
-
-from contextlib2 import ExitStack
 from box import Box
+from contextlib2 import ExitStack
 
-from .util.general import load_global_config, yaml_dumps
+from .plugins import get_expected, get_extra_sessions, get_request_type, get_verifiers
+from .printer import log_fail, log_pass
+from .schemas.files import verify_tests
 from .util import exceptions
 from .util.delay import delay
-from .util.loader import IncludeLoader
 from .util.env_vars import check_env_var_settings
-from .printer import log_pass, log_fail
-
-from .plugins import get_extra_sessions, get_request_type, get_verifiers, get_expected
-
-from .schemas.files import verify_tests
-
+from .util.general import load_global_config, yaml_dumps
+from .util.loader import IncludeLoader
 
 logger = logging.getLogger(__name__)
+
+assertion_message = """ Test {name!r}
+file: {file!s}
+
+failed:
+{errors!s}
+
+stage:
+{stage!s}
+request:
+{request!s}
+
+response:
+{response!s}
+""".format
+
+
+def format_dict(data):
+    return '\n'.join(['{}: {}'.format(k, data[k]) for k in data])
+
+
+def format_request(request):
+    message = '{!s} {!s}'.format(request.method, request.url)
+    message = '{!s}\n{!s}'.format(message, format_dict(request.headers))
+    return message
+
+
+def format_response(response):
+    message = 'HTTP/1.1 {!s} {!s}'.format(response.status_code, response.reason)
+    message = '{!s}\n{!s}'.format(message, format_dict(response.headers))
+    message = '{!s}\n\n{!s}'.format(message, response.text)
+    return message
 
 
 def run_test(in_file, test_spec, global_cfg):
@@ -117,11 +144,13 @@ def run_test(in_file, test_spec, global_cfg):
                     log_fail(stage, v, expected)
                     errors = "- " + "\n- ".join(ret.errors)
 
-                    raise AssertionError("Test '{:s}'\n\nin file: {:s}\n\nstage:\n{:s}\nfailed:\n{:s}".format(
-                        v.name,
-                        str(in_file),
-                        textwrap.indent(yaml_dumps([stage]), '  '),
-                        errors))
+                    raise AssertionError(assertion_message(
+                        name=v.name,
+                        file=str(in_file),
+                        stage=textwrap.indent(yaml_dumps([stage]), '  '),
+                        request=textwrap.indent(format_request(response.request), '  '),
+                        response=textwrap.indent(format_response(response), '  '),
+                        errors=errors))
 
                 test_block_config["variables"].update(ret.saved)
 
