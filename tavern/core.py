@@ -40,6 +40,7 @@ def format_dict(data):
 def format_request(request):
     message = '{!s} {!s}'.format(request.method, request.url)
     message = '{!s}\n{!s}'.format(message, format_dict(request.headers))
+    message = '{!s}\n\n{!s}'.format(message, request.body.decode())
     return message
 
 
