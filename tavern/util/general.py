@@ -1,7 +1,9 @@
 import logging
-import yaml
-from .dict_util import deep_dict_merge
+from io import StringIO
 
+import yaml
+
+from .dict_util import deep_dict_merge
 
 logger = logging.getLogger(__name__)
 
@@ -29,3 +31,10 @@ def load_global_config(global_cfg_paths):
             global_cfg = deep_dict_merge(global_cfg, contents)
 
     return global_cfg
+
+
+def yaml_dumps(data, **kwargs):
+    stream = StringIO()
+    kwargs.setdefault('default_flow_style', False)
+    yaml.dump(data, stream, **kwargs)
+    return stream.getvalue()

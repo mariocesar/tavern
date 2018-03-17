@@ -1,12 +1,14 @@
 import logging
 import os
+import pprint
+import textwrap
 
 import yaml
 
 from contextlib2 import ExitStack
 from box import Box
 
-from .util.general import load_global_config
+from .util.general import load_global_config, yaml_dumps
 from .util import exceptions
 from .util.delay import delay
 from .util.loader import IncludeLoader
@@ -44,6 +46,8 @@ def run_test(in_file, test_spec, global_cfg):
 
     # Initialise test config for this test with the global configuration before
     # starting
+    __tracebackhide__ = True
+
     test_block_config = dict(global_cfg)
 
     if "variables" not in test_block_config:
@@ -107,13 +111,19 @@ def run_test(in_file, test_spec, global_cfg):
             verifiers = get_verifiers(stage, test_block_config, sessions, expected)
 
             for v in verifiers:
-                try:
-                    saved = v.verify(response)
-                except exceptions.TavernException:
+                ret = v.verify(response)
+
+                if ret.errors:
                     log_fail(stage, v, expected)
-                    raise
-                else:
-                    test_block_config["variables"].update(saved)
+                    errors = "- " + "\n- ".join(ret.errors)
+
+                    raise AssertionError("Test '{:s}'\n\nin file: {:s}\n\nstage:\n{:s}\nfailed:\n{:s}".format(
+                        v.name,
+                        str(in_file),
+                        textwrap.indent(yaml_dumps([stage]), '  '),
+                        errors))
+
+                test_block_config["variables"].update(ret.saved)
 
             log_pass(stage, verifiers)
 

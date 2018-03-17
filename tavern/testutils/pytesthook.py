@@ -1,15 +1,12 @@
 import logging
 
 import pytest
-
 import yaml
-
 from tavern.core import run_test
-from tavern.util.general import load_global_config
-from tavern.util.exceptions import TavernException
-from tavern.util.loader import IncludeLoader
 from tavern.schemas.files import verify_tests
-
+from tavern.util.exceptions import TavernException
+from tavern.util.general import load_global_config
+from tavern.util.loader import IncludeLoader
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +41,19 @@ def pytest_addoption(parser):
     )
 
 
-class YamlFile(pytest.File):
+def pytest_addhooks(pluginmanager):
+    """Register plugin hooks."""
+    from . import pytesthookspecs
 
+    try:
+        # pytest >= 2.8
+        pluginmanager.add_hookspecs(pytesthookspecs)
+    except AttributeError:
+        # pytest < 2.8
+        pluginmanager.addhooks(pytesthookspecs)
+
+
+class YamlFile(pytest.File):
     """Custom `File` class that loads each test block as a different test
     """
 
@@ -64,7 +72,6 @@ class YamlFile(pytest.File):
 
 
 class YamlItem(pytest.Item):
-
     """Simple wrapper around new test type that can report errors more
     accurately than the default pytest reporting stuff
 
@@ -84,6 +91,8 @@ class YamlItem(pytest.Item):
     def runtest(self):
         verify_tests(self.spec)
 
+        self.config.hook.pytest_tavern_before_runtest(spec=self.spec)
+
         # Load ini first
         ini_global_cfg_paths = self.config.getini("tavern-global-cfg") or []
         # THEN load command line, to allow overwriting of values
@@ -94,7 +103,7 @@ class YamlItem(pytest.Item):
 
         run_test(self.path, self.spec, global_cfg)
 
-    def repr_failure(self, excinfo): # pylint: disable=no-self-use
+    def repr_failure(self, excinfo):  # pylint: disable=no-self-use
         """ called when self.runtest() raises an exception.
 
         Todo:

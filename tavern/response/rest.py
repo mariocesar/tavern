@@ -2,6 +2,7 @@ import json
 import traceback
 import logging
 import copy
+from collections import namedtuple
 
 try:
     from urllib.parse import urlparse, parse_qs
@@ -17,6 +18,7 @@ from .base import BaseResponse, indent_err_text
 
 logger = logging.getLogger(__name__)
 
+VerifyReturn = namedtuple('VerifyReturn', 'saved, errors')
 
 class RestResponse(BaseResponse):
 
@@ -68,6 +70,7 @@ class RestResponse(BaseResponse):
             TestFailError: Something went wrong with validating the response
         """
         # pylint: disable=too-many-statements
+        # __tracebackhide__ = True
 
         logger.info("Response: '%s' (%s)", response, response.content.decode("utf8"))
 
@@ -143,10 +146,7 @@ class RestResponse(BaseResponse):
         self._validate_block("headers", response.headers)
         self._validate_block("redirect_query_params", qp_as_dict)
 
-        if self.errors:
-            raise TestFailError("Test '{:s}' failed:\n{:s}".format(self.name, self._str_errors()))
-
-        return saved
+        return VerifyReturn(saved, self.errors)
 
     def _validate_block(self, blockname, block):
         """Validate a block of the response
