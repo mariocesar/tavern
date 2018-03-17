@@ -11,7 +11,7 @@ except ImportError:
 from future.utils import raise_from
 import requests
 from box import Box
-
+from requests.exceptions import ConnectionError
 from tavern.util import exceptions
 from tavern.util.dict_util import format_keys, check_expected_keys
 from tavern.schemas.extensions import get_wrapped_create_function
@@ -122,7 +122,8 @@ def get_request_args(rspec, test_block_config):
     # https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods
     if request_args["method"] in ["GET", "HEAD", "OPTIONS"]:
         if any(i in request_args for i in ["json", "data"]):
-            warnings.warn("You are trying to send a body with a HTTP verb that has no semantic use for it", RuntimeWarning)
+            warnings.warn("You are trying to send a body with a HTTP verb that has no semantic use for it",
+                          RuntimeWarning)
 
     return request_args
 
@@ -186,12 +187,24 @@ class RestRequest(BaseRequest):
         Returns:
             requests.Response: response object
         """
+        __tracebackhide__ = True
 
-        try:
-            return self._prepared()
-        except requests.exceptions.RequestException as e:
-            logger.exception("Error running prepared request")
-            raise_from(exceptions.RestRequestException, e)
+        retries = 0
+
+        while True:
+            try:
+                response = self._prepared()
+            except ConnectionError:
+                logger.exception("Connection error, retrying")
+                retries += 1
+            except requests.exceptions.RequestException as e:
+                logger.exception("Error running prepared request")
+                raise_from(exceptions.RestRequestException, e)
+            else:
+                return response
+
+            if retries > 5:
+                break
 
     @property
     def request_vars(self):
